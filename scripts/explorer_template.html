@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>House price explorer</title>
+<link rel="icon" href="data:,">
+<style>
+:root {
+  --bg: #f7f7f5; --card: #ffffff; --ink: #1c1f23; --muted: #5b6370; --line: #d9dce1;
+  --blue: #0072B2; --orange: #E69F00; --green: #009E73; --red: #D55E00; --grey: #8a919c;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #14171b; --card: #1d2127; --ink: #eceef1; --muted: #a4abb6; --line: #343a43;
+          --blue: #56B4E9; --orange: #F0B93A; --green: #3fc79d; --red: #F08A4B; --grey: #8a919c; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 1040px; margin: 0 auto; padding: 20px 16px 48px; }
+h1 { font-size: 1.5rem; margin: 0 0 4px; }
+h2 { font-size: 1.1rem; margin: 0 0 8px; }
+p.lead { color: var(--muted); margin: 0 0 12px; }
+.notice { border-left: 4px solid var(--orange); background: var(--card); padding: 8px 12px; margin: 12px 0 20px; border-radius: 4px; font-size: .9rem; }
+section { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin-bottom: 18px; }
+table { border-collapse: collapse; width: 100%; font-size: .85rem; }
+th, td { text-align: right; padding: 5px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; white-space: normal; }
+th { color: var(--muted); font-weight: 600; }
+tr.sel td { background: color-mix(in srgb, var(--blue) 12%, transparent); }
+.scroll { overflow-x: auto; }
+svg { width: 100%; height: auto; display: block; }
+svg text { fill: var(--ink); font-size: 11px; }
+svg .muted { fill: var(--muted); }
+.controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 12px; }
+label { display: block; font-size: .85rem; color: var(--muted); margin-bottom: 2px; }
+label b { color: var(--ink); }
+input[type=range], select { width: 100%; }
+select { padding: 6px; background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 12px 0; }
+.kpi { border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; }
+.kpi .v { font-size: 1.25rem; font-weight: 650; }
+.kpi .l { font-size: .75rem; color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: .8rem; color: var(--muted); margin-top: 6px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+#tip { min-height: 2.6em; font-size: .85rem; color: var(--muted); margin-top: 6px; }
+small { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>House price explorer</h1>
+  <p class="lead">Held-out test predictions with 90% prediction intervals, plus model comparison, error by price segment and SHAP importance. Everything is precomputed by the repository's <code>train</code> and <code>evaluate</code> runs; nothing is fitted in the browser.</p>
+  <div class="notice">Research demo on old, small public data. Not a valuation or appraisal tool.</div>
+
+  <section id="pva">
+    <h2>Predicted vs actual, with intervals</h2>
+    <div class="controls">
+      <div><label for="ds">Dataset</label><select id="ds"></select></div>
+      <div><label for="method">Interval method</label>
+        <select id="method">
+          <option value="cqr">Conformalised quantile regression (CQR)</option>
+          <option value="split_conformal">Split conformal (log-scale residuals)</option>
+          <option value="raw_quantile_band">Raw 5%/95% quantile band (no correction)</option>
+        </select></div>
+      <div><label for="nshow">Points shown: <b id="nshow-val"></b></label><input id="nshow" type="range" min="50" max="600" step="50" value="300"></div>
+      <div><label for="axis">Axes</label>
+        <select id="axis"><option value="log">logarithmic</option><option value="linear">linear</option></select></div>
+      <div><label for="misses">Show</label>
+        <select id="misses"><option value="all">all sampled homes</option><option value="miss">only homes outside their interval</option></select></div>
+    </div>
+    <div class="kpis" id="kpis"></div>
+    <div id="pva-chart" role="img" aria-label="Scatter plot of predicted against actual price with prediction interval bars"></div>
+    <div class="legend"><span><i style="background:var(--blue)"></i>actual inside the interval</span><span><i style="background:var(--red)"></i>actual outside the interval</span><span><i style="background:var(--grey)"></i>perfect prediction</span></div>
+    <div id="tip" aria-live="polite">Move the pointer over the chart to read a home's actual price, prediction and interval.</div>
+    <p><small id="pva-note"></small></p>
+  </section>
+
+  <section id="compare">
+    <h2>Model comparison</h2>
+    <p class="lead" id="compare-note"></p>
+    <div class="scroll"><table id="cmp-table"></table></div>
+  </section>
+
+  <section id="segments">
+    <h2>Error and interval coverage by price</h2>
+    <p class="lead">Table: error of the selected model by segment of the <em>actual</em> price (equal-count bins). Models tend to over-predict the cheapest homes and under-predict the dearest, a regression-to-the-mean effect. Chart: how often the chosen interval method covers the actual price within each segment of the <em>predicted</em> price.</p>
+    <div class="scroll"><table id="seg-table"></table></div>
+    <div id="cov-chart" role="img" aria-label="Bar chart of interval coverage per predicted-price segment"></div>
+    <div class="legend"><span><i style="background:var(--blue)"></i>empirical coverage in the segment (1 = cheapest 20% of predictions)</span><span><i style="background:var(--orange)"></i>nominal 90%</span></div>
+  </section>
+
+  <section id="importance">
+    <h2>Feature importance (SHAP, XGBoost)</h2>
+    <p class="lead">Mean absolute SHAP value per feature on the test split, in log-price units: a value of 0.10 means the feature moves the predicted price by about 10% on average.</p>
+    <div id="imp-chart" role="img" aria-label="Bar chart of mean absolute SHAP value per feature"></div>
+  </section>
+</main>
+<script>
+const DATA = /*__DATA__*/null;
+const $ = (id) => document.getElementById(id);
+const NS = "http://www.w3.org/2000/svg";
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const usd = (x) => "$" + Math.round(x).toLocaleString("en-US");
+const usdk = (x) => (x >= 1e6 ? (x / 1e6).toFixed(1) + "M" : Math.round(x / 1000) + "k");
+const f3 = (x) => x.toFixed(3);
+const pct = (x) => (100 * x).toFixed(1) + "%";
+const width = (id) => Math.max(300, Math.min(640, $(id).clientWidth || 640));
+const NAMES = { king_county: "King County house sales (Seattle area, 2014 to 2015)", california: "California Housing (1990 census block groups)" };
+
+function el(tag, attrs, parent, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text != null) e.textContent = text;
+  if (parent) parent.appendChild(e);
+  return e;
+}
+const cur = () => DATA[$("ds").value];
+let view = null;
+
+function intervalStats(d, method) {
+  const [lo, hi] = d.points[method], y = d.points.actual;
+  let hit = 0, w = 0; const rel = [];
+  for (let i = 0; i < y.length; i++) { if (y[i] >= lo[i] && y[i] <= hi[i]) hit++; w += hi[i] - lo[i]; rel.push((hi[i] - lo[i]) / y[i]); }
+  rel.sort((a, b) => a - b);
+  return { coverage: hit / y.length, width: w / y.length, relWidth: rel[Math.floor(rel.length / 2)] };
+}
+
+function renderPva() {
+  const d = cur(), method = $("method").value, n = parseInt($("nshow").value, 10);
+  $("nshow-val").textContent = n;
+  const s = intervalStats(d, method);
+  const nominal = 1 - d.meta.alpha;
+  $("kpis").innerHTML = [
+    [pct(s.coverage), `coverage on ${d.points.actual.length.toLocaleString("en-US")} test homes (nominal ${pct(nominal)})`],
+    [usd(s.width), "mean interval width"],
+    [pct(s.relWidth), "median width relative to actual price"],
+    [d.meta.selected_label, "point-prediction model"],
+  ].map(([v, l]) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`).join("");
+
+  const N = d.points.actual.length, step = Math.max(1, Math.floor(N / n));
+  const [LO, HI] = d.points[method], Y = d.points.actual, P = d.points.pred;
+  let idx = []; for (let i = 0; i < N; i += step) idx.push(i);
+  if ($("misses").value === "miss") idx = Array.from({ length: N }, (_, i) => i).filter((i) => Y[i] < LO[i] || Y[i] > HI[i]).slice(0, 600);
+  const W = width("pva-chart"), H = Math.round(W * 0.82), L = 52, R = 26, T = 10, B = 40;
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}` });
+  const logAxes = $("axis").value === "log";
+  const vmax = Math.max(...idx.map((i) => Math.max(Y[i], HI[i], P[i])), 1) * 1.05;
+  const vmin = logAxes ? Math.max(1000, Math.min(...idx.map((i) => Math.min(Y[i], P[i], LO[i])), vmax) * 0.9) : 0;
+  const sc = (v) => (logAxes ? (Math.log(Math.max(v, vmin)) - Math.log(vmin)) / (Math.log(vmax) - Math.log(vmin)) : (v - vmin) / (vmax - vmin));
+  const x = (v) => L + sc(v) * (W - L - R), y = (v) => T + (1 - sc(v)) * (H - T - B);
+  const ticks = [];
+  if (logAxes) {
+    for (let e = Math.floor(Math.log10(vmin)); e <= Math.ceil(Math.log10(vmax)); e++) for (const m of [1, 2, 5]) { const v = m * 10 ** e; if (v >= vmin && v <= vmax) ticks.push(v); }
+  } else {
+    for (let i = 0; i <= 5; i++) ticks.push(vmin + ((vmax - vmin) * i) / 5);
+  }
+  for (const v of ticks) {
+    el("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: css("--line") }, svg);
+    el("text", { x: L - 6, y: y(v) + 4, "text-anchor": "end", class: "muted" }, svg, "$" + usdk(v));
+    el("text", { x: x(v), y: H - 24, "text-anchor": "middle", class: "muted" }, svg, "$" + usdk(v));
+  }
+  el("text", { x: (L + W - R) / 2, y: H - 6, "text-anchor": "middle", class: "muted" }, svg, "actual price");
+  el("text", { x: 12, y: H / 2, "text-anchor": "middle", class: "muted", transform: `rotate(-90 12 ${H / 2})` }, svg, "predicted price");
+  el("line", { x1: x(vmin), y1: y(vmin), x2: x(vmax), y2: y(vmax), stroke: css("--grey"), "stroke-dasharray": "4 3" }, svg);
+  for (const i of idx) {
+    const inside = Y[i] >= LO[i] && Y[i] <= HI[i], c = inside ? css("--blue") : css("--red");
+    el("line", { x1: x(Y[i]), x2: x(Y[i]), y1: y(Math.max(LO[i], vmin)), y2: y(HI[i]), stroke: c, "stroke-opacity": 0.35, "stroke-width": 1.2 }, svg);
+    el("circle", { cx: x(Y[i]), cy: y(P[i]), r: 2.2, fill: c }, svg);
+  }
+  $("pva-chart").replaceChildren(svg);
+  const pts = idx.map((i) => ({ i, px: x(Y[i]), py: y(P[i]) }));
+  svg.addEventListener("pointermove", (ev) => {
+    const r = svg.getBoundingClientRect(), mx = ((ev.clientX - r.left) / r.width) * W, my = ((ev.clientY - r.top) / r.height) * H;
+    let best = null, bd = 1e9;
+    for (const p of pts) { const dd = (p.px - mx) ** 2 + (p.py - my) ** 2; if (dd < bd) { bd = dd; best = p; } }
+    if (best && bd < 900) { const i = best.i; $("tip").textContent = `Actual ${usd(Y[i])}; predicted ${usd(P[i])}; interval ${usd(LO[i])} to ${usd(HI[i])} (${Y[i] >= LO[i] && Y[i] <= HI[i] ? "inside" : "outside"}).`; }
+  });
+  $("pva-note").textContent = idx.length === 0
+    ? "No sampled home falls outside its interval."
+    : `Showing ${idx.length === N ? "all " : idx.length + " of "}${N.toLocaleString("en-US")} held-out homes${step > 1 && idx.length < N ? ` (every ${step}th row)` : ""}. Coverage and widths above use all of them.`;
+}
+
+function renderCompare() {
+  const d = cur();
+  $("compare-note").textContent = `Test split of ${NAMES[$("ds").value]}: ${d.meta.n_test.toLocaleString("en-US")} homes. Intervals are 95% bootstrap percentiles. The selected model (by nested-CV RMSLE, not by test) is highlighted.`;
+  let html = "<thead><tr><th>Model</th><th>Nested-CV RMSE</th><th>Test RMSE</th><th>Test MAE</th><th>Test R&sup2;</th><th>Test MAPE</th></tr></thead><tbody>";
+  const c = (o, f) => `${f(o.value)} [${f(o.lo)}, ${f(o.hi)}]`;
+  for (const m of d.models) {
+    html += `<tr class="${m.model === d.meta.selected ? "sel" : ""}"><td>${m.label}</td><td>${usd(m.cv_rmse.mean)} &plusmn; ${usd(m.cv_rmse.sd)}</td>` +
+      `<td>${c(m.test_rmse, usd)}</td><td>${c(m.test_mae, usd)}</td><td>${c(m.test_r2, f3)}</td><td>${c(m.test_mape, f3)}</td></tr>`;
+  }
+  $("cmp-table").innerHTML = html + "</tbody>";
+}
+
+function renderSegments() {
+  const d = cur(), method = $("method").value;
+  let html = "<thead><tr><th>Actual-price segment</th><th>n</th><th>Price range</th><th>MAE</th><th>MAPE</th><th>Mean signed error</th></tr></thead><tbody>";
+  for (const g of d.segments) {
+    html += `<tr><td>${g.segment}</td><td>${g.n}</td><td>${usd(g.price_min)} to ${usd(g.price_max)}</td><td>${usd(g.mae)}</td><td>${pct(g.mape)}</td><td>${(g.bias_pct >= 0 ? "+" : "") + pct(g.bias_pct)}</td></tr>`;
+  }
+  $("seg-table").innerHTML = html + "</tbody>";
+  const seg = d.intervals[method].by_predicted_price_segment, nominal = 1 - d.meta.alpha;
+  const W = width("cov-chart"), H = 210, L = 40, R = 10, T = 14, B = 44;
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}` });
+  const bw = (W - L - R) / seg.length;
+  for (let i = 0; i <= 4; i++) {
+    const v = i / 4, yy = T + (1 - v) * (H - T - B);
+    el("line", { x1: L, x2: W - R, y1: yy, y2: yy, stroke: css("--line") }, svg);
+    el("text", { x: L - 6, y: yy + 4, "text-anchor": "end", class: "muted" }, svg, pct(v).replace(".0", ""));
+  }
+  seg.forEach((g, i) => {
+    const h = g.coverage * (H - T - B);
+    el("rect", { x: L + i * bw + bw * 0.15, y: H - B - h, width: bw * 0.7, height: h, fill: css("--blue"), rx: 2 }, svg);
+    el("text", { x: L + i * bw + bw / 2, y: H - B - h - 4, "text-anchor": "middle" }, svg, pct(g.coverage));
+    el("text", { x: L + i * bw + bw / 2, y: H - B + 14, "text-anchor": "middle", class: "muted" }, svg, `${g.segment}`);
+    if (W >= 500) el("text", { x: L + i * bw + bw / 2, y: H - B + 27, "text-anchor": "middle", class: "muted" }, svg, "$" + usdk(g.pred_min) + "-" + usdk(g.pred_max));
+  });
+  const yn = T + (1 - nominal) * (H - T - B);
+  el("line", { x1: L, x2: W - R, y1: yn, y2: yn, stroke: css("--orange"), "stroke-width": 2, "stroke-dasharray": "5 3" }, svg);
+  $("cov-chart").replaceChildren(svg);
+}
+
+function renderImportance() {
+  const items = cur().importance.slice(0, 12);
+  const W = width("imp-chart"), rowH = 22, padL = W < 500 ? 120 : 170, padR = 44, top = 6, H = top + items.length * rowH + 22;
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}` });
+  const max = Math.max(...items.map((i) => i.mean_abs_shap));
+  const x = (v) => padL + (v / max) * (W - padL - padR);
+  items.forEach((it, i) => {
+    const y = top + i * rowH;
+    el("text", { x: padL - 8, y: y + 15, "text-anchor": "end" }, svg, it.feature);
+    el("rect", { x: padL, y: y + 3, width: Math.max(1, x(it.mean_abs_shap) - padL), height: rowH - 8, fill: css("--blue"), rx: 2 }, svg);
+    el("text", { x: x(it.mean_abs_shap) + 5, y: y + 15, class: "muted" }, svg, it.mean_abs_shap.toFixed(3));
+  });
+  el("text", { x: padL, y: H - 4, class: "muted" }, svg, "mean |SHAP| (log price)");
+  $("imp-chart").replaceChildren(svg);
+}
+
+const renderAll = () => { renderPva(); renderCompare(); renderSegments(); renderImportance(); };
+function init() {
+  Object.keys(DATA).forEach((k) => $("ds").add(new Option(NAMES[k] || k, k)));
+  if (Object.keys(DATA).length < 2) $("ds").disabled = true;
+  ["ds", "method", "misses", "axis"].forEach((id) => $(id).addEventListener("change", renderAll));
+  $("nshow").addEventListener("input", renderPva);
+  renderAll();
+}
+init();
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", renderAll);
+let lastW = window.innerWidth;
+window.addEventListener("resize", () => { if (window.innerWidth !== lastW) { lastW = window.innerWidth; renderAll(); } });
+</script>
+</body>
+</html>
