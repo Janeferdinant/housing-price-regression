@@ -1,0 +1,14 @@
+{
+ "model": "xgb",
+ "units": "log price",
+ "importance_test": {
+  "Latitude": 0.30679598450660706,
+  "Longitude": 0.24250204861164093,
+  "MedInc": 0.17250144481658936,
+  "AveOccup": 0.09274572134017944,
+  "AveRooms": 0.0662996843457222,
+  "HouseAge": 0.022188743576407433,
+  "AveBedrms": 0.016288554295897484,
+  "Population": 0.015819907188415527
+ }
+}

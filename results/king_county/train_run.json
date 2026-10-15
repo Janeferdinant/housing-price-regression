@@ -1,0 +1,110 @@
+{
+ "env": {
+  "date": "2026-10-15",
+  "python": "3.11.9",
+  "os": "Windows 10",
+  "cpu": "AMD64 Family 25 Model 33 Stepping 0, AuthenticAMD",
+  "cpu_count": 16,
+  "gpu": "GPU: none (CPU only)",
+  "packages": {
+   "numpy": "2.4.6",
+   "pandas": "3.0.6",
+   "scikit-learn": "1.9.1",
+   "xgboost": "3.2.0",
+   "optuna": "5.0.0",
+   "shap": "0.51.0",
+   "matplotlib": "3.11.2"
+  }
+ },
+ "seconds_nested_cv": 470.6,
+ "seconds_final_fit": 405.7,
+ "config": {
+  "out": ".",
+  "dataset": "king_county",
+  "data_file": null,
+  "data_dir": null,
+  "seed": 42,
+  "trials": 15,
+  "splits": 5,
+  "inner_splits": 3,
+  "jobs": 5,
+  "models": [
+   "mean",
+   "ols",
+   "ridge",
+   "lasso",
+   "enet",
+   "rf",
+   "hgb",
+   "xgb",
+   "stack"
+  ],
+  "bootstrap": 1000
+ },
+ "final_params": {
+  "mean": {
+   "params": {},
+   "inner_rmsle": null
+  },
+  "ols": {
+   "params": {},
+   "inner_rmsle": null
+  },
+  "ridge": {
+   "params": {
+    "alpha": 0.010221922977737944
+   },
+   "inner_rmsle": 0.17720717737444325
+  },
+  "lasso": {
+   "params": {
+    "alpha": 0.0001013256882927
+   },
+   "inner_rmsle": 0.17827805105052683
+  },
+  "enet": {
+   "params": {
+    "alpha": 0.00011137414908293544,
+    "l1_ratio": 0.12290649301577677
+   },
+   "inner_rmsle": 0.17763053192249997
+  },
+  "rf": {
+   "params": {
+    "max_features": 0.825728302958764,
+    "min_samples_leaf": 1,
+    "max_depth": 30
+   },
+   "inner_rmsle": 0.17575462059810498
+  },
+  "hgb": {
+   "params": {
+    "learning_rate": 0.07612899488456391,
+    "max_leaf_nodes": 36,
+    "min_samples_leaf": 37,
+    "l2_regularization": 2.315123392775995,
+    "max_iter": 385
+   },
+   "inner_rmsle": 0.16204694817353751
+  },
+  "xgb": {
+   "params": {
+    "n_estimators": 407,
+    "learning_rate": 0.03752903780231217,
+    "max_depth": 5,
+    "min_child_weight": 1,
+    "subsample": 0.7321632100727032,
+    "colsample_bytree": 0.8193449868388435,
+    "reg_lambda": 0.7278761002226172
+   },
+   "inner_rmsle": 0.1624087632638528
+  }
+ },
+ "dataset_notes": {
+  "rule_repeat_sales": "kept the latest sale of each house id",
+  "rule_bedrooms": "dropped bedrooms > 15",
+  "n_rows": 21435,
+  "n_raw_rows": 21613,
+  "date_range": "2014-05-02 to 2015-05-27"
+ }
+}
