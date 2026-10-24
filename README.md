@@ -15,8 +15,9 @@
 | Ridge RMSE, USD (95% CI) | 132,323 [118,065, 149,281] | 67,934 [65,557, 70,485] |
 | XGBoost RMSE, USD (95% CI) | 130,554 [106,122, 158,173] | 48,005 [45,656, 50,544] |
 | Coverage of 90% intervals on the test split: split conformal / CQR / raw quantile band | 0.894 / 0.891 / 0.844 | 0.889 / 0.891 / 0.837 |
+| Status of every figure in this table | Verified (run 2026-10-15, seed 42) | Verified (run 2026-10-15, seed 42) |
 
-Findings, each backed by the tables below:
+Findings, each backed by the tables below (status: Verified (run 2026-10-15, seed 42)):
 
 - **King County: the models agree on dollars and differ on percentages.** Dollar RMSE is dominated by a few very expensive homes (the dearest fifth of the test split has an RMSE of 248,555), so its differences are within noise: stack minus ridge is -7,408 [-21,628, +7,730]. On MAE, MAPE and RMSLE the gradient-boosted models and the stack are clearly better than the linear models (MAPE 0.113 [0.109, 0.117] for the stack against 0.133 [0.129, 0.138] for ridge). The stack beats XGBoost on RMSE by -5,640 [-11,237, -1,713].
 - **California: trees win clearly.** Ridge is no better than OLS, and the tree models cut RMSE by about 20,000 dollars (stack minus ridge -20,860 [-22,753, -19,030]); latitude and longitude carry the most SHAP weight, and location effects are likely non-linear (not tested separately). The stack beats XGBoost by a small but real margin (-931 [-1,577, -447]).
@@ -87,7 +88,7 @@ Cleaning rules, all fixed in advance and row-wise (so they cannot leak): King Co
 
 ## Results
 
-All numbers are from `docs/runs/2026-10-15-king_county-run.md` and `docs/runs/2026-10-15-california-run.md` (seed 42, run on 2026-10-15) and `results/<dataset>/*.json`. Intervals are 95% bootstrap percentile intervals over the test rows (1,000 resamples).
+All numbers are from `docs/runs/2026-10-15-king_county-run.md` and `docs/runs/2026-10-15-california-run.md` (seed 42, run on 2026-10-15) and `results/<dataset>/*.json`. Status of every table below: Verified (run 2026-10-15, seed 42). Intervals are 95% bootstrap percentile intervals over the test rows (1,000 resamples).
 
 ### King County, hold-out test split
 
